@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "CrossX-LNKD",
+    "slug": "crossx-lnkd",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "crossxlnkd",
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.crossxlnkd.app"
+    },
+    "android": {
+      "package": "com.crossxlnkd.app"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "CrossX-LNKD needs access to your photos to attach media to a post.",
+          "cameraPermission": "CrossX-LNKD needs access to your camera to attach media to a post."
+        }
+      ]
+    ],
+    "extra": {
+      "revenueCatApiKeyIos": "",
+      "revenueCatApiKeyAndroid": "",
+      "revenueCatEntitlementId": "full_access"
+    }
+  }
+}

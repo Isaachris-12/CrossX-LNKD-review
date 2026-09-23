@@ -1,0 +1,33 @@
+node_modules/
+dist/
+build/
+.env
+.env.*
+!.env.example
+
+# Expo / React Native
+.expo/
+.expo-shared/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+ios/
+android/
+
+# Prisma
+server/prisma/migrations/dev.db
+
+# Local media storage (dev-only storage driver, see server/src/storage/)
+server/media-storage/
+
+# Claude Code session/tooling metadata (local, machine-specific)
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+npm-debug.log*

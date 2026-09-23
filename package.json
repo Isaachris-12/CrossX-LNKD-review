@@ -1,0 +1,24 @@
+{
+  "name": "crossx-lnkd",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "server",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:server": "npm run dev --workspace=server",
+    "dev:worker": "npm run worker --workspace=server",
+    "dev:mobile": "npm run start --workspace=apps/mobile",
+    "prisma:migrate": "npm run prisma:migrate --workspace=server"
+  },
+  "allowScripts": {
+    "@prisma/client@5.22.0": true,
+    "@prisma/engines@5.22.0": true,
+    "bcrypt@5.1.1": true,
+    "esbuild@0.28.2": true,
+    "msgpackr-extract@3.0.4": true,
+    "prisma@5.22.0": true
+  }
+}

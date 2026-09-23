@@ -1,0 +1,97 @@
+# Render Blueprint - deploys the API, the background worker, a managed
+# Postgres database, and a managed Redis instance from one file.
+# https://render.com/docs/blueprint-spec
+#
+# Unlike the Dockerfile (built and run-tested locally), this file's exact
+# field names haven't been verified against a live Render deploy - check it
+# against Render's current Blueprint docs when you first apply it, in case
+# their schema has moved on since this was written.
+#
+# Usage: push this repo to GitHub, then in the Render dashboard choose
+# "New +" -> "Blueprint" and point it at the repo. Render will read this
+# file and provision everything below. Env vars marked `sync: false` are
+# secrets you'll be prompted to fill in via the dashboard - never commit
+# real values for these.
+
+databases:
+  - name: crossx-lnkd-db
+    plan: starter
+    postgresMajorVersion: "16"
+
+services:
+  - type: redis
+    name: crossx-lnkd-redis
+    plan: starter
+    ipAllowList: [] # only reachable from other services in this Render project
+
+  - type: web
+    name: crossx-lnkd-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: node dist/index.js
+    plan: starter
+    healthCheckPath: /health
+    preDeployCommand: npx prisma migrate deploy --schema=server/prisma/schema.prisma
+    envVars: &sharedEnvVars
+      - key: PORT
+        value: 4000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: crossx-lnkd-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: crossx-lnkd-redis
+          property: connectionString
+      # Secrets - fill these in via the Render dashboard after the first deploy.
+      - key: JWT_SECRET
+        sync: false
+      - key: TOKEN_ENCRYPTION_KEY
+        sync: false
+      - key: APP_SCHEME
+        value: crossxlnkd
+      # Set this to the API service's own Render URL (or your custom domain)
+      # once it's known - see DEPLOYMENT.md.
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: META_APP_ID
+        sync: false
+      - key: META_APP_SECRET
+        sync: false
+      - key: META_GRAPH_VERSION
+        value: v21.0
+      - key: TIKTOK_CLIENT_KEY
+        sync: false
+      - key: TIKTOK_CLIENT_SECRET
+        sync: false
+      - key: LINKEDIN_CLIENT_ID
+        sync: false
+      - key: LINKEDIN_CLIENT_SECRET
+        sync: false
+      - key: YOUTUBE_CLIENT_ID
+        sync: false
+      - key: YOUTUBE_CLIENT_SECRET
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_PUBLIC_URL_BASE
+        sync: false
+
+  - type: worker
+    name: crossx-lnkd-worker
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: node dist/worker.js
+    plan: starter
+    envVars: *sharedEnvVars

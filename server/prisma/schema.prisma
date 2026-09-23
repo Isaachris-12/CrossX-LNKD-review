@@ -1,0 +1,172 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Platform {
+  INSTAGRAM
+  TIKTOK
+  FACEBOOK
+  LINKEDIN
+  YOUTUBE
+  REDDIT
+  BLUESKY
+  PINTEREST
+  MASTODON
+}
+
+enum ConnectedAccountStatus {
+  connected
+  expired
+  revoked
+}
+
+enum PostDispatchStatus {
+  pending
+  partial
+  complete
+  failed
+}
+
+// Not every platform's adapter supports STORY (see PlatformAdapter.supportsStories
+// in server/src/platforms/types.ts) - the /posts route rejects a STORY
+// submission targeting an account whose platform doesn't.
+enum PostContentType {
+  FEED
+  STORY
+}
+
+enum PostTargetStatus {
+  queued
+  posting
+  success
+  failed
+}
+
+// "trial" and "expired" both mean unsubscribed - the distinction is only for
+// UI copy (days-remaining countdown vs. "trial ended"). Access rules for both
+// are identical: capped at FREE_PLATFORM_LIMIT connections, no disconnecting.
+// "active" is the only status with unrestricted access. See
+// server/src/subscription/access.ts.
+enum SubscriptionStatus {
+  trial
+  active
+  expired
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  // Trial window starts at signup; never changes afterward. The app always
+  // sets this explicitly on signup (see subscription/access.ts); the DB
+  // default only exists so adding this column to a table with existing rows
+  // doesn't need an interactive migration prompt.
+  trialEndsAt DateTime @default(dbgenerated("(now() + interval '3 days')"))
+
+  subscriptionStatus     SubscriptionStatus @default(trial)
+  // The current paid period's end (or grace period end) as reported by
+  // RevenueCat - null until the first purchase event arrives.
+  subscriptionExpiresAt  DateTime?
+
+  connectedAccounts ConnectedAccount[]
+  postDispatches    PostDispatch[]
+  refreshTokens     RefreshToken[]
+}
+
+// Refresh tokens are opaque, random strings on the client; only their SHA-256
+// hash is stored here so a leaked database dump can't be replayed as tokens.
+// Each refresh rotates: the old row is marked revoked and a new one issued.
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
+
+  @@index([userId])
+}
+
+// OAuth tokens are stored encrypted (AES-256-GCM) and are never returned to any client.
+// The raw content of a post is never stored here — see PostTarget.
+model ConnectedAccount {
+  id                  String                 @id @default(cuid())
+  userId              String
+  user                User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platform            Platform
+  platformUserId      String
+  displayName         String
+  avatarUrl           String?
+  accessTokenEncrypted  String
+  refreshTokenEncrypted String?
+  tokenExpiresAt      DateTime?
+  scopes              String[]
+  status              ConnectedAccountStatus @default(connected)
+
+  dailyPostLimit    Int      @default(0)
+  dailyPostCount    Int      @default(0)
+  dailyCountResetAt DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  postTargets        PostTarget[]
+  analyticsSnapshots AnalyticsSnapshot[]
+
+  @@unique([userId, platform, platformUserId])
+  @@index([userId])
+}
+
+// A single Post+ submission fanned out to one or more connected accounts.
+// The composed caption/media is intentionally NOT persisted here — it only
+// exists transiently in the dispatch job payload (Redis) until the job completes.
+model PostDispatch {
+  id          String              @id @default(cuid())
+  userId      String
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status      PostDispatchStatus  @default(pending)
+  contentType PostContentType     @default(FEED)
+  createdAt   DateTime            @default(now())
+
+  targets PostTarget[]
+
+  @@index([userId])
+}
+
+model PostTarget {
+  id                 String            @id @default(cuid())
+  postDispatchId     String
+  postDispatch       PostDispatch      @relation(fields: [postDispatchId], references: [id], onDelete: Cascade)
+  connectedAccountId String
+  connectedAccount   ConnectedAccount  @relation(fields: [connectedAccountId], references: [id], onDelete: Cascade)
+  platform           Platform
+  status             PostTargetStatus  @default(queued)
+  platformPostId     String?
+  errorMessage       String?
+  postedAt           DateTime?
+
+  @@index([postDispatchId])
+  @@index([connectedAccountId])
+}
+
+model AnalyticsSnapshot {
+  id                 String           @id @default(cuid())
+  connectedAccountId String
+  connectedAccount   ConnectedAccount @relation(fields: [connectedAccountId], references: [id], onDelete: Cascade)
+  capturedAt         DateTime         @default(now())
+  followers          Int              @default(0)
+  views              Int              @default(0)
+  likes              Int              @default(0)
+  shares             Int              @default(0)
+  comments           Int              @default(0)
+
+  @@index([connectedAccountId, capturedAt])
+}
